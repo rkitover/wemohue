@@ -72,3 +72,13 @@ launchctl load ~/Library/LaunchAgents/com.magneto.togglehuedaemon.plist
 `reattach-to-user-namespace`.
 
 Make sure `~/bin` is in your PATH, which you can set in `~/.bashrc`.
+
+## Toggle Script
+
+The `toggle_hue` script will toggle the lights from on to off and from off to
+on, and make the switch reflect the stgate of the lights. If you need to
+explicitly set the lights to on or off from another script, program or
+whatever, you can pass an `on` or `off` parameter, e.g. `toggle_hue on` or
+`toggle_hue off`.
+
+It also takes a `toggle` parameter which is the same as no parameter at all.
