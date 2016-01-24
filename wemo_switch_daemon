@@ -1,0 +1,109 @@
+#!/usr/bin/env python
+
+import logging, os, os.path, time, sys, gevent, yaml
+from gevent               import socket
+sys.path.insert(1, os.path.expanduser('~/src/ouimeaux'))
+from ouimeaux.environment import Environment
+from ouimeaux.signals     import statechange, receiver
+
+CRLF = '\015\012'
+
+def connect_to_hue_daemon():
+    global hue_sock
+    hue_sock  = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    connected = False
+
+    while not connected:
+        try:
+            log.debug('connecting to hue daemon')
+            hue_sock.connect(os.path.expanduser('~/run/toggle_hue.sock'))
+            connected = True
+            log.debug('connection to hue daemon successful, sending ident')
+            gevent.spawn(send_to_hue_daemon, 'ident: wemo_switch_daemon')
+            log.debug('listening for events from hue daemon')
+            gevent.spawn(hue_events)
+        except (socket.error, IOError) as e:
+            log.error('connection to hue daemon failed, retrying: %s' % e)
+            gevent.sleep(5)
+
+def send_to_hue_daemon(msg):
+    while True:
+        try:
+            log.debug("sending '%s' message to hue daemon" % msg)
+            hue_sock.sendall(msg + CRLF)
+            log.debug("message '%s' sent to hue daemon successfully" % msg)
+            return
+        except (socket.error, IOError) as e:
+            log.error('not connected to hue daemon, reconnecting: %s' % e)
+            connect_to_hue_daemon()
+
+switch_event_ignore_counter = 0
+
+# Listen for events on the hue daemon socket and adjust switch state appropriately
+def hue_events():
+    global switch_event_ignore_counter
+    # using a makefile because we want to use readline()
+    fh = hue_sock.makefile(mode='rb')
+    while True:
+        line = fh.readline()
+
+        if not line:
+            log.debug('disconnected from hue daemon')
+            break
+
+        msg = line.strip().lower()
+
+        log.debug("received '%s' from hue daemon" % msg)
+
+        if msg == 'on':
+            log.debug('setting switch to ON')
+            switch.on()
+        elif msg == 'off':
+            log.debug('setting switch to OFF')
+            switch.off()
+        else:
+            log.error("received invalid message '%s' from hue daemon" % msg)
+            gevent.spawn(socket.sendall, "ERROR: invalid message '%s'" % msg)
+            continue
+
+        switch_event_ignore_counter += 1
+
+    fh.close()
+
+logging.basicConfig(format='%(asctime)s %(message)s')
+log = logging.getLogger('wemo_switch_daemon')
+log.setLevel(logging.DEBUG)
+
+log.debug('starting wemo switch daemon')
+
+connect_to_hue_daemon()
+
+log.debug('retrieving wemo environment')
+
+env = Environment()
+env.start()
+env.discover(5)
+
+switch = env.get_switch(yaml.load(open(os.path.expanduser('~/.wemohue/config.yml'), 'r')).get('wemo_switch'))
+
+@receiver(statechange, sender=switch)
+def switch_toggle(*args, **kwargs):
+    global switch_event_ignore_counter
+    if switch_event_ignore_counter != 0:
+        log.debug('ignoring switch event')
+        switch_event_ignore_counter -= 1
+        return
+
+    if kwargs['state'] == 1:
+        log.debug('received switch ON state event')
+        gevent.spawn(send_to_hue_daemon, 'on')
+    else:
+        log.debug('received switch OFF state event')
+        gevent.spawn(send_to_hue_daemon, 'off')
+
+try:
+    log.debug('entering event loop')
+    env.wait()
+except (KeyboardInterrupt, SystemExit):
+    log.debug('exiting wemo switch daemon')
+    exit(0)

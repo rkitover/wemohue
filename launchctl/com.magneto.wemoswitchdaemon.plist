@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+
+<plist version="1.0">
+    <dict>
+        <key>Label</key>
+        <string>com.magneto.wemoswitchdaemon</string>
+        <key>RunAtLoad</key>
+        <true/>
+        <key>KeepAlive</key>
+        <dict>
+            <key>SuccessfulExit</key>
+            <false/>
+        </dict>
+        <key>ProgramArguments</key>
+        <array>
+            <string>/bin/bash</string>
+            <string>-c</string>
+            <string>/usr/local/bin/python ~/bin/wemo_switch_daemon 2&gt;&amp;1 | /usr/sbin/rotatelogs -n 5 ~/log/wemo_switch_daemon.log 86400</string>
+        </array>
+    </dict>
+</plist>

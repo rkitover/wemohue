@@ -1,0 +1,13 @@
+#!/usr/bin/env python
+
+import socket, os.path, sys
+
+sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+sock.connect(os.path.expanduser('~/run/toggle_hue.sock'))
+
+arg = sys.argv[1].lower() if len(sys.argv) > 1 else 'toggle'
+
+if arg not in ['on', 'off', 'toggle']:
+    raise ValueError("command must be 'on', 'off' or 'toggle'")
+
+sock.sendall(arg + '\015\012')

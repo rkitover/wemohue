@@ -1,0 +1,79 @@
+#!/usr/bin/env python
+
+import os, os.path, sys, logging, gevent, yaml
+from phue          import Bridge
+from gevent        import socket
+from gevent.server import StreamServer
+
+CRLF = '\015\012'
+
+wemo_socket = None
+
+# This is adapted from
+# https://github.com/gevent/gevent/blob/master/examples/echoserver.py
+#
+# this handler will be run for each incoming connection in a dedicated greenlet
+def recv_cmd(socket, address):
+    global log, bridge, wemo_socket
+    fileno = socket.fileno()
+    log.debug('new connection on %d' % fileno)
+    # using a makefile because we want to use readline()
+    fh = socket.makefile(mode='rb')
+    while True:
+        line = fh.readline()
+
+        if not line:
+            log.debug('client %d disconnected' % fileno)
+            break
+
+        msg = line.strip().lower()
+
+        if msg == 'on':
+            on_state = True
+        elif msg == 'off':
+            on_state = False
+        elif msg == 'toggle':
+            on_state = not bridge.get_group(1, 'on')
+        elif msg == 'ident: wemo_switch_daemon':
+            log.debug('client %d is wemo switch daemon' % fileno)
+            wemo_socket = socket
+            continue
+        else:
+            log.error("received invalid message '%s' on %d" % (msg, fileno))
+            gevent.spawn(socket.sendall, "ERROR: invalid message '%s'" % msg)
+            continue
+        
+        log.debug("processing '%s' on %d" % (msg, fileno))
+        bridge.set_group(1, { 'hue': 33862, 'sat': 50, 'bri': 254, 'on': on_state }, transitiontime=0)
+
+        if wemo_socket and socket is not wemo_socket:
+            gevent.spawn(wemo_socket.sendall, ('on' if on_state else 'off') + CRLF)
+
+    fh.close()
+
+logging.basicConfig(format='%(asctime)s %(message)s')
+log = logging.getLogger('toggle_hue_daemon')
+log.setLevel(logging.DEBUG)
+
+bridge = Bridge(yaml.load(open(os.path.expanduser('~/.wemohue/config.yml'), 'r')).get('hue_bridge'))
+
+if not os.path.exists(os.path.expanduser('~/run')):
+    os.mkdir(os.path.expanduser('~/run'), 0700)
+
+sock_file = os.path.expanduser('~/run/toggle_hue.sock')
+
+if os.path.exists(sock_file):
+    os.remove(sock_file)
+
+server_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+server_sock.bind(sock_file)
+server_sock.listen(25)
+
+log.debug('starting hue control daemon on %s' % sock_file)
+server = StreamServer(server_sock, recv_cmd)
+
+try:
+    server.serve_forever()
+except (KeyboardInterrupt, SystemExit):
+    log.debug('hue control daemon exiting')
+    exit(0)
