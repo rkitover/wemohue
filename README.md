@@ -40,9 +40,8 @@ cd ~/src
 git clone https://github.com/rkitover/wemohue.git wemohue
 cd wemohue
 chmod +x toggle_hue* wemo*
-ln -sf `pwd`/toggle_hue `pwd`/toggle_hue_daemon `pwd`/wemo_switch_daemon ~/bin
-(python ~/bin/wemo_switch_daemon 2>&1 | rotatelogs -n 5 ~/log/wemo_switch_daemon.log 86400) & disown
-(python ~/bin/toggle_hue_daemon  2>&1 | rotatelogs -n 5 ~/log/toggle_hue_daemon.log  86400) & disown
+ln -sf `pwd`/toggle_hue `pwd`/toggle_hue_daemon `pwd`/wemo_switch_daemon `pwd`/wemohue ~/bin
+wemohue start
 
 ```
 
@@ -50,8 +49,7 @@ Run `crontab -e` to add the following entries, if you don't know how to use vim
 run `EDITOR=nano crontab -e` instead:
 
 ```crontab
-@reboot     (python ~/bin/wemo_switch_daemon 2>&1 | rotatelogs -n 5 ~/log/wemo_switch_daemon.log 86400) &
-@reboot     (python ~/bin/toggle_hue_daemon  2>&1 | rotatelogs -n 5 ~/log/toggle_hue_daemon.log  86400) &
+@reboot     ~/bin/wemohue start
 ```
 
 ## Mac Installation
@@ -72,17 +70,16 @@ cd ~/src
 git clone https://github.com/rkitover/wemohue.git wemohue
 cd wemohue
 chmod +x toggle_hue* wemo*
-ln -sf `pwd`/toggle_hue `pwd`/toggle_hue_daemon `pwd`/wemo_switch_daemon ~/bin
+ln -sf `pwd`/toggle_hue `pwd`/toggle_hue_daemon `pwd`/wemo_switch_daemon `pwd`/wemohue ~/bin
 cp launchctl/*.plist ~/Library/LaunchAgents
-launchctl load ~/Library/LaunchAgents/com.magneto.wemoswitchdaemon.plist
-launchctl load ~/Library/LaunchAgents/com.magneto.togglehuedaemon.plist
+wemohue start
 
 ```
 
 *NOTE:* you cannot run launchctl commands in tmux unless you are using
 `reattach-to-user-namespace`.
 
-## Toggle Script
+## `toggle_hue` Toggle Script
 
 The `toggle_hue` script will toggle the lights from on to off and from off to
 on, and make the switch reflect the stgate of the lights. If you need to
@@ -91,3 +88,10 @@ whatever, you can pass an `on` or `off` parameter, e.g. `toggle_hue on` or
 `toggle_hue off`.
 
 It also takes a `toggle` parameter which is the same as no parameter at all.
+
+## `wemohue` Control Script
+
+The `wemohue` command controls the two daemons, it takes one parameter which is
+either `start`, `stop`, `restart` or `status`.
+
+The `status` command will show the daemon processes.

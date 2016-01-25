@@ -1,0 +1,37 @@
+#!/bin/sh
+
+case "$(uname -s)" in
+    Darwin)
+        osx=1
+        ;;
+    *)
+        unix=1
+        ;;
+esac
+
+case "$1" in
+    start)
+        if [ "$unix" = 1 ]; then
+            (python ~/bin/toggle_hue_daemon  2>&1 | rotatelogs -n 5 ~/log/toggle_hue_daemon.log  86400) & disown
+            (python ~/bin/wemo_switch_daemon 2>&1 | rotatelogs -n 5 ~/log/wemo_switch_daemon.log 86400) & disown
+        else # mac
+            launchctl load ~/Library/LaunchAgents/com.magneto.wemoswitchdaemon.plist
+            launchctl load ~/Library/LaunchAgents/com.magneto.togglehuedaemon.plist
+        fi
+        ;;
+    status)
+        ps -u "$(whoami)" -o pid,args | grep -v bash | grep python | grep '\(toggle_hue_daemon\|wemo_switch_daemon\)'
+        ;;
+    stop)
+        if [ "$unix" = 1 ]; then
+            "$0" status | awk '{ print $1 }' | xargs kill
+        else # mac
+            launchctl unload ~/Library/LaunchAgents/com.magneto.wemoswitchdaemon.plist
+            launchctl unload ~/Library/LaunchAgents/com.magneto.togglehuedaemon.plist
+        fi
+        ;;
+    restart)
+        "$0" stop
+        "$0" start
+        ;;
+esac
